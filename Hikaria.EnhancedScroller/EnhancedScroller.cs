@@ -81,7 +81,7 @@ namespace Hikaria.ES
     /// power in your application.
     /// </summary>
     //[RequireComponent(typeof(ScrollRect))]
-    [Il2CppImplements(typeof(IBeginDragHandler), typeof(IEndDragHandler), typeof(IDragHandler), typeof(IPointerDownHandler), typeof(IPointerUpHandler))]
+    //[Il2CppImplements(typeof(IBeginDragHandler), typeof(IEndDragHandler), typeof(IDragHandler), typeof(IPointerDownHandler), typeof(IPointerUpHandler))]
     public class EnhancedScroller : MonoBehaviour
     {
         #region Public
@@ -121,17 +121,19 @@ namespace Hikaria.ES
         /// <summary>
         /// The direction the scroller is handling
         /// </summary>
-        public ScrollDirectionEnum scrollDirection;
+        public ScrollDirectionEnum scrollDirection = ScrollDirectionEnum.Vertical;
+
+        public bool enableTopSpacer;
 
         /// <summary>
         /// The number of pixels between cell views, starting after the first cell view
         /// </summary>
-        public float spacing;
+        public float spacing = 10;
 
         /// <summary>
         /// The padding inside of the scroller: top, bottom, left, right.
         /// </summary>
-        public RectOffset padding;
+        public RectOffset padding = new();
 
         /// <summary>
         /// Whether the scroller should loop the cell views
@@ -162,7 +164,7 @@ namespace Hikaria.ES
         /// Whether the scollbar should be shown
         /// </summary>
         //[SerializeField]
-        private ScrollbarVisibilityEnum scrollbarVisibility;
+        private ScrollbarVisibilityEnum scrollbarVisibility = ScrollbarVisibilityEnum.OnlyIfNeeded;
 
         /// <summary>
         /// Whether snapping is turned on
@@ -221,7 +223,7 @@ namespace Hikaria.ES
         /// If you want to go immediately to the snap location you can either
         /// set the snapTweenType to immediate or set the snapTweenTime to zero.
         /// </summary>
-        public TweenType snapTweenType;
+        public TweenType snapTweenType = TweenType.immediate;
 
         /// <summary>
         /// The time it takes to interpolate between the current scroll
@@ -1304,6 +1306,11 @@ namespace Hikaria.ES
         private RectTransform _container;
 
         /// <summary>
+        /// Cached reference to the viewport's transform.
+        /// </summary>
+        private RectTransform _viewportRectTransform;
+
+        /// <summary>
         /// Cached reference to the layout group that handles view positioning
         /// </summary>
         private HorizontalOrVerticalLayoutGroup _layoutGroup;
@@ -1328,6 +1335,11 @@ namespace Hikaria.ES
         /// List of views that have been recycled
         /// </summary>
         private SmallList<EnhancedScrollerCellView> _recycledCellViews = new SmallList<EnhancedScrollerCellView>();
+
+        /// <summary>
+        /// Cached reference to the element used to offset the first visible cell view
+        /// </summary>
+        private LayoutElement _topSpacer;
 
         /// <summary>
         /// Cached reference to the element used to offset the first visible cell view
@@ -1585,6 +1597,22 @@ namespace Hikaria.ES
 
             // set up the visibility of the scrollbar
             ScrollbarVisibility = scrollbarVisibility;
+
+            if (enableTopSpacer && scrollDirection == ScrollDirectionEnum.Vertical)
+            {
+                float contentHeight = _cellViewOffsetArray.Last() + padding.top + padding.bottom;
+                float viewportHeight = _viewportRectTransform.rect.height;
+
+                if (contentHeight < viewportHeight)
+                {
+                    _topSpacer.minHeight = viewportHeight - contentHeight;
+                    _topSpacer.flexibleHeight = 1;
+                }
+                else if (_topSpacer != null)
+                {
+                    _topSpacer.minHeight = 0;
+                }
+            }
         }
 
         /// <summary>
@@ -1829,7 +1857,7 @@ namespace Hikaria.ES
             if (listPosition == ListPositionEnum.Last)
                 cellView.transform.SetSiblingIndex(_container.childCount - 2);
             else if (listPosition == ListPositionEnum.First)
-                cellView.transform.SetSiblingIndex(1);
+                cellView.transform.SetSiblingIndex(2);
 
             // call the visibility change delegate if available
             if (cellViewVisibilityChanged != null) cellViewVisibilityChanged(cellView);
@@ -1951,32 +1979,43 @@ namespace Hikaria.ES
                 return _GetCellIndexAtPosition(position, middleIndex + 1, endIndex);
         }
 
-        /// <summary>
-        /// Caches and initializes the scroller
-        /// </summary>
-        void Awake()
+        private void Awake()
+        {
+            _scrollRect = this.GetComponent<ScrollRect>();
+            _scrollRectTransform = _scrollRect.GetComponent<RectTransform>();
+        }
+
+        public void Setup(ScrollRect scrollRect, RectTransform containerTransform, RectTransform viewportTransform)
         {
             GameObject go;
 
             // cache some components
-            _scrollRect = this.GetComponent<ScrollRect>();
+            _scrollRect = scrollRect;
             _scrollRectTransform = _scrollRect.GetComponent<RectTransform>();
+            _container = containerTransform;
 
             // destroy any content objects if they exist. Likely there will be
             // one at design time because Unity gives errors if it can't find one.
-            if (_scrollRect.content != null)
-            {
-                DestroyImmediate(_scrollRect.content.gameObject);
-            }
+            //if (_scrollRect.content != null)
+            //{
+                //DestroyImmediate(_scrollRect.content.gameObject);
+            //}
 
             // Create a new active cell view container with a layout group
-            go = new GameObject("Container", Il2CppType.Of<RectTransform>());
-            go.transform.SetParent(_scrollRectTransform);
+            //go = new GameObject("Container", typeof(RectTransform));
+            //go.transform.SetParent(_scrollRectTransform);
+            //if (scrollDirection == ScrollDirectionEnum.Vertical)
+            //    go.AddComponent<VerticalLayoutGroup>();
+            //else
+            //    go.AddComponent<HorizontalLayoutGroup>();
+            //_container = go.GetComponent<RectTransform>();
+
+            _viewportRectTransform = viewportTransform;
+
             if (scrollDirection == ScrollDirectionEnum.Vertical)
-                go.AddComponent<VerticalLayoutGroup>();
+                _container.gameObject.AddComponent<VerticalLayoutGroup>();
             else
-                go.AddComponent<HorizontalLayoutGroup>();
-            _container = go.GetComponent<RectTransform>();
+                _container.gameObject.AddComponent<HorizontalLayoutGroup>();
 
             // set the containers anchor and pivot
             if (scrollDirection == ScrollDirectionEnum.Vertical)
@@ -2023,13 +2062,20 @@ namespace Hikaria.ES
 
             // create the padder objects
 
+            go = new GameObject("Top Spacer", Il2CppType.Of<RectTransform>(), Il2CppType.Of<LayoutElement>());
+            go.transform.SetParent(_container, false);
+            _topSpacer = go.GetComponent<LayoutElement>();
+            _topSpacer.transform.SetSiblingIndex(0);
+
             go = new GameObject("First Padder", Il2CppType.Of<RectTransform>(), Il2CppType.Of<LayoutElement>());
             go.transform.SetParent(_container, false);
             _firstPadder = go.GetComponent<LayoutElement>();
+            _firstPadder.transform.SetSiblingIndex(1);
 
             go = new GameObject("Last Padder", Il2CppType.Of<RectTransform>(), Il2CppType.Of<LayoutElement>());
             go.transform.SetParent(_container, false);
             _lastPadder = go.GetComponent<LayoutElement>();
+            _lastPadder.transform.SetSiblingIndex(-1);
 
             // create the recycled cell view container
             go = new GameObject("Recycled Cells", Il2CppType.Of<RectTransform>());
