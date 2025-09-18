@@ -431,9 +431,9 @@ namespace Hikaria.ES
             get
             {
                 if (scrollDirection == ScrollDirectionEnum.Vertical)
-                    return Mathf.Max(_container.rect.height - _scrollRectTransform.rect.height, 0);
+                    return Mathf.Max(_container.rect.height - _viewportRectTransform.rect.height, 0);
                 else
-                    return Mathf.Max(_container.rect.width - _scrollRectTransform.rect.width, 0);
+                    return Mathf.Max(_container.rect.width - _viewportRectTransform.rect.width, 0);
             }
         }
 
@@ -699,9 +699,9 @@ namespace Hikaria.ES
             get
             {
                 if (scrollDirection == ScrollDirectionEnum.Vertical)
-                    return _scrollRectTransform.rect.height;
+                    return _viewportRectTransform.rect.height;
                 else
-                    return _scrollRectTransform.rect.width;
+                    return _viewportRectTransform.rect.width;
             }
         }
 
@@ -796,7 +796,7 @@ namespace Hikaria.ES
             if (_delegate != null)
                 _Resize(false);
 
-            if (_scrollRect == null || _scrollRectTransform == null || _container == null)
+            if (_scrollRect == null || _scrollRectTransform == null || _container == null || _viewportRectTransform == null)
             {
                 _scrollPosition = 0f;
                 return;
@@ -1672,6 +1672,7 @@ namespace Hikaria.ES
             for (var i = 0; i < _cellViewSizeArray.Count; i++)
             {
                 offset += _cellViewSizeArray[i];
+                offset = (float)Math.Round(offset, 1);
                 _cellViewOffsetArray.Add(offset);
             }
         }
@@ -1947,7 +1948,7 @@ namespace Hikaria.ES
 
             // get the positions of the scroller
             var startPosition = _scrollPosition - lookAheadBefore + _calculateStartCellBias;
-            var endPosition = _scrollPosition + (scrollDirection == ScrollDirectionEnum.Vertical ? _scrollRectTransform.rect.height : _scrollRectTransform.rect.width) + lookAheadAfter;
+            var endPosition = _scrollPosition + (scrollDirection == ScrollDirectionEnum.Vertical ? _viewportRectTransform.rect.height : _viewportRectTransform.rect.width) + lookAheadAfter;
 
             // calculate each index based on the positions
             startIndex = GetCellViewIndexAtPosition(startPosition);
@@ -1985,20 +1986,18 @@ namespace Hikaria.ES
             _scrollRectTransform = _scrollRect.GetComponent<RectTransform>();
         }
 
-        public void Setup(ScrollRect scrollRect, RectTransform containerTransform, RectTransform viewportTransform)
+        public void Setup(RectTransform containerTransform, RectTransform viewportTransform)
         {
             GameObject go;
 
             // cache some components
-            _scrollRect = scrollRect;
-            _scrollRectTransform = _scrollRect.GetComponent<RectTransform>();
             _container = containerTransform;
 
             // destroy any content objects if they exist. Likely there will be
             // one at design time because Unity gives errors if it can't find one.
             //if (_scrollRect.content != null)
             //{
-                //DestroyImmediate(_scrollRect.content.gameObject);
+            //  DestroyImmediate(_scrollRect.content.gameObject);
             //}
 
             // Create a new active cell view container with a layout group
@@ -2366,7 +2365,7 @@ namespace Hikaria.ES
             if (scrollerSnapped != null) scrollerSnapped(this, _snapCellViewIndex, _snapDataIndex, cellView);
         }
 
-        #endregion
+#endregion
 
         #region Tweening
 
